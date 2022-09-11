@@ -1,56 +1,6 @@
 # Golang 学习笔记
 
 
-### 报错以及问题
-
-#### **问题：**
-
-​	**配置GO：**
-
-在
-
-```
-export GOROOT=/usr/local/go
-export GOPATH=/home/ubuntu/gopath
-export PATH=$GOPATH/bin:$GOROOT/bin:$PATH
-```
-
-go env -w GOPROXY=https://goproxy.cn,direct
-
-
-
-
-
-#### **报错：**
-
-`ERROR：go run: cannot run *_test.go files` ：`*_test.go`是`golang`特有的约定，为测试文件，一般不要命名为该格式。
-
- 在go get 之后，package 已经下载在 $GOPATH/pkg/mod 下。但使用 VSCode 写 Go 时仍然出现 `can not import find [...] in any of [...] 报错 `   报错但是依然可以编译运行，vscode只打开一个项目，不在报错。
-
-提示**rune 文字中的字符数过多**：单引号换成漂号  **\``**
-
-![image-20220509011928314](https://test-1309023885.cos.ap-guangzhou.myqcloud.com/typora/image-20220509011928314.png)
-
-### 细节
-
-**注释**
-
-Golang中**注释**类型：
-Go支持c语言风格的`/**/`块注释，也支持c++风格的`//`行注释。行注释更通用，块注释主要用于针对包的详细说明或者屏蔽大块的代码
-
-1. 行注释 `//`     VSCode快捷键：`ctrl+/`  再按一次取消注释
-2. 块注释（多行注释） `/**/ `     VSCode快捷键：`shift+alt+a` 再按一次取消注释
-            注意：块注释中不可以嵌套块注释
-
-**标准库函数源码**
-
-Golang 的函数源码在golang安装目录 `src`文件夹下：
-
-<img src="https://test-1309023885.cos.ap-guangzhou.myqcloud.com/typora/image-20220430113053087.png" alt="image-20220430113053087" style="zoom:67%;" />
-
-
-
-标准库API文档查看：Golang中文网在线标准库文档: https://studygolang.com/pkgdoc
 
 ### 变量与数据类型
 
@@ -85,8 +35,6 @@ age = 10
 age1 = 20
 num = 12
 ```
-
-![image-20220430190431159](Golang 学习笔记.assets/image-20220430190431159.png)
 
 ps:控制台输入`go run test_1.go ` 可以直接运行
 
@@ -718,6 +666,76 @@ breakTag://标签
 
 
 
+### Struct
+
+```
+type 类型名 struct {
+    字段名 字段类型
+    字段名 字段类型
+    …
+}
+```
+
+
+
+通过指针创建结构体
+
+```
+var p2 = new(person)
+```
+
+
+
+取结构体地址相当于对该结构体类型进行了一次`new`实例化
+
+```
+p3 := &person{}
+```
+
+
+
+使用键值对进行初始化
+
+```
+p5 := person{
+	name: "COCO",
+	city: "北京",
+	age:  18,
+}
+```
+
+对结构体指针进行初始化
+
+```
+p6 := &person{
+	name: "COCO",
+	city: "北京",
+	age:  18,
+}
+```
+
+使用值列表进行初始化（省略字段名）：
+
+```
+p8 := &person{
+	"COCO",
+	"北京",
+	28,
+}
+```
+
+结构体占用一段连续的内存。
+
+
+
+内存对齐：
+
+https://www.liwenzhou.com/posts/Go/struct-memory-layout/
+
+
+
+
+
 ### Array 数组
 
 ```
@@ -857,11 +875,21 @@ go
 
 ### !切片Slice
 
-切片（Slice）是一个**拥有相同类型元素的可变长度的序列**。它是**基于数组类型**做的一层封装。它非常灵活，支持自动扩容。
+切片（Slice）是一个**拥有相同类型元素的可变长度的序列**。他是有引用类型。
+
+ go/src/reflect/**value.go** 中
+
+```go
+type SliceHeader struct {
+	Data uintptr
+	Len  int
+	Cap  int
+}
+```
+
+
 
 **切片的本质**就是对底层数组的封装，它包含了三个信息：底层数组的指针、切片的长度（len）和切片的容量（cap）。
-
-**切片是一个引用类型**，它的内部结构包含`地址`、`长度`和`容量`。切片一般用于快速地操作一块数据集合。
 
 切片的遍历方式和数组是一致的，支持索引遍历和`for range`遍历。
 
@@ -983,6 +1011,189 @@ make(map[KeyType]ValueType, [cap])
 ```
 
 其中cap表示map的容量，该参数虽然不是必须的，但是我们应该在初始化map的时候就为其指定一个合适的容量。
+
+
+
+map类型
+
+```
+ go/src/cmd/compile/internal/types)/type.go
+```
+
+```go
+type Map struct {
+	Key  *Type // Key type
+	Elem *Type // Val (elem) type
+
+	Bucket *Type // internal struct type representing a hash bucket
+	Hmap   *Type // internal struct type representing the Hmap (map header object)
+	Hiter  *Type // internal struct type representing hash iterator state
+}
+```
+
+Bucket 是哈希桶, Hmap 表征了 map 底层使用的 HashTable 的元信息
+
+
+
+#### map的底层实现
+
+源码存放位置：`golang\go\src\runtime\map`
+
+map类型的底层实现是hash表，`hash` 是一个指向 [`runtime.hmap`](https://draveness.me/golang/tree/runtime.hmap) 结构体的指针；
+
+```go
+type hmap struct {
+	count     int // 已经存储的键值对数目
+	flags     uint8 //当前map处于的状态
+	B         uint8  // buckets的数量为2的B次幂
+	noverflow uint16 //溢出桶使用的数量
+	hash0     uint32 // 哈希种子
+
+	buckets    unsafe.Pointer // 记录桶在哪，buckets的数量为2的B次方，或者当count==0时为nil
+	oldbuckets unsafe.Pointer // 扩容阶段保存的旧桶位置，平时为nil，迁移时有值
+	nevacuate  uintptr        // 迁移进度，记录渐进式扩容阶段下一个要迁移的旧桶编号
+
+	extra *mapextra // 溢出桶的情况
+}
+```
+
+**迁移进度nevacuate**：渐进式扩容，在哈希表读写过程中，如果监测到处于扩容阶段，完成一部分键值对的迁移任务，直到所有的旧桶迁移完成，可以避免一次性扩容带来的瞬时抖动
+
+**count 字段**表征了 map 目前的元素数目, 当使用 len() 函数获取 map 长度时, 返回的便是 count 成员的值, 因此 len() 函数作用于 map 结构时, 其时间复杂度为 O(1)O(1)
+
+ **flag** 字段标志 map 的状态, 如 map **当前正在被遍历或正在被写入**
+
+**noverflow** 是溢出桶的数目, 这个数值不是恒定精确的, 当其 B>=16 时为近似值
+
+**hash0**是随机哈希种子, map创建时调用 fastrand 函数生成的随机数, 设置的目的是为了降低哈希冲突的概率
+
+
+
+**哈希桶的结构bmap**
+
+map所使用的桶的结构，一个桶可以存放8个键值对
+
+ 由于 go map 的 key 和 elem 可以有多种数据类型, 因此哈希桶的数据类型也会随着 key 和 elem 数据类型的不同而不同, 具体的数据类型是在编译期确定的, 因此 bmap 在 go 的源码中没有显式定义出来
+
+```go
+type bmap struct {
+
+	tophash [bucketCnt]uint8
+}
+
+/*
+//一个桶可以容纳的最大的键值对 1左移三位 也就是8（2的3次方
+bucketCntBits = 3
+bucketCnt     = 1 << bucketCntBits
+*/
+```
+
+还原结构：
+
+```go
+type bmap struct {
+    topbits  [8]uint8
+    keys     [8]keytype
+    elems    [8]elemtype
+    
+    overflow uintptr
+}
+```
+
+ topbits 是键哈希值的高 8 位,
+
+keys 存放了哈希桶中所有键, elems 存放了哈希桶中的所有值
+
+overflow 是一个 uintptr 类型指针, 存放了所指向的溢出桶的地址
+
+ go map 的每个哈希桶最多存放 8 个键值对, 当经由哈希函数映射到该地址的元素数超过 8 个时, 会将新的元素放到溢出桶中, 并使用 overflow 指针链向这个溢出桶
+
+
+
+
+
+
+
+**记录溢出桶的相关信息**
+
+```go
+type mapextra struct {
+	overflow    *[]*bmap //切片，记录已经使用的溢出桶的地址
+	oldoverflow *[]*bmap //扩容阶段存储旧桶用到的溢出桶的地址
+
+	nextOverflow *bmap //下一个空闲的溢出桶
+}
+```
+
+
+
+
+
+
+
+
+
+
+
+#### make map时发生了什么？
+
+
+
+```go
+func makemap_small() *hmap {
+	h := new(hmap)
+	h.hash0 = fastrand()  //随机数
+	return h
+}
+```
+
+
+
+```go
+func makemap(t *maptype, hint int, h *hmap) *hmap {
+    //MulUintptr 计算两数相乘是否溢出 MaxAllc是分配的最大大小。
+	mem, overflow := math.MulUintptr(uintptr(hint), t.bucket.size)
+	if overflow || mem > maxAlloc {
+		hint = 0
+	}
+
+	// initialize Hmap
+	if h == nil {
+		h = new(hmap)
+	}
+	h.hash0 = fastrand()
+
+	// Find the size parameter B which will hold the requested # of elements.
+	// For hint < 0 overLoadFactor returns false since hint < bucketCnt.
+	B := uint8(0)
+	for overLoadFactor(hint, B) {
+		B++
+	}
+	h.B = B
+
+	// allocate initial hash table
+	// if B == 0, the buckets field is allocated lazily later (in mapassign)
+	// If hint is large zeroing this memory could take a while.
+	if h.B != 0 {
+		var nextOverflow *bmap
+		h.buckets, nextOverflow = makeBucketArray(t, h.B, nil)
+		if nextOverflow != nil {
+			h.extra = new(mapextra)
+			h.extra.nextOverflow = nextOverflow
+		}
+	}
+
+	return h
+}
+```
+
+
+
+
+
+
+
+
 
 通过 key 获取值将有**两个返回值**，**第一个返回值是获取的值**，如果 key 不存在，返回空值，第二个参数是一个 bool 值，表示获取值是否获取成功。
 
@@ -1108,6 +1319,21 @@ stu04 81
 var sliceMap := make(map[string][]int,8) //队sliceMap初始化
 //其中值为整数数组
 ```
+
+
+
+
+
+
+
+
+
+### new make
+
+- `make` 的作用是初始化内置的数据结构，切片slice、哈希表map和 Channel
+- `new` 的作用是根据传入的类型分配一片内存空间并返回指向这片内存空间的指针
+
+
 
 
 
@@ -1436,452 +1662,589 @@ json序列化：go语言中的数据 -> json数据格式
 
 
 
-## Gin 框架
 
 
 
-#### 函数：
 
-**Query:**
+
+
+
+
+## 报错以及问题
+
+#### **问题：**
+
+​	**配置GO：**
+
+在
+
+```
+export GOROOT=/usr/local/go
+export GOPATH=/home/ubuntu/gopath
+export PATH=$GOPATH/bin:$GOROOT/bin:$PATH
+```
+
+go env -w GOPROXY=https://goproxy.cn,direct
+
+
+
+##### `go get -u `下载包
+
+D:\code\golang_project\pkg\mod\github.com
+
+
+
+
+
+#### **报错：**
+
+`ERROR：go run: cannot run *_test.go files` ：`*_test.go`是`golang`特有的约定，为测试文件，一般不要命名为该格式。
+
+ 在go get 之后，package 已经下载在 $GOPATH/pkg/mod 下。但使用 VSCode 写 Go 时仍然出现 `can not import find [...] in any of [...] 报错 `   报错但是依然可以编译运行，vscode只打开一个项目，不在报错。
+
+提示**rune 文字中的字符数过多**：单引号换成漂号  **\``**
+
+![image-20220509011928314](https://test-1309023885.cos.ap-guangzhou.myqcloud.com/typora/image-20220509011928314.png)
+
+### 细节
+
+**注释**
+
+Golang中**注释**类型：
+Go支持c语言风格的`/**/`块注释，也支持c++风格的`//`行注释。行注释更通用，块注释主要用于针对包的详细说明或者屏蔽大块的代码
+
+1. 行注释 `//`     VSCode快捷键：`ctrl+/`  再按一次取消注释
+2. 块注释（多行注释） `/**/ `     VSCode快捷键：`shift+alt+a` 再按一次取消注释
+       注意：块注释中不可以嵌套块注释
+
+**标准库函数源码**
+
+Golang 的函数源码在golang安装目录 `src`文件夹下：
+
+<img src="https://test-1309023885.cos.ap-guangzhou.myqcloud.com/typora/image-20220430113053087.png" alt="image-20220430113053087" style="zoom:67%;" />
+
+
+
+标准库API文档查看：Golang中文网在线标准库文档: https://studygolang.com/pkgdoc
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## 雪花算法
+
+![image-20220619220351999](https://test-1309023885.cos.ap-guangzhou.myqcloud.com/typora/image-20220619220351999.png)
+
+
+
+
+
+
 
 ```go
-func (c *Context) Query(key string) string {
-	value, _ := c.GetQuery(key)
-	return value
-}
-```
-
-Query返回参数值，如果不存在的话则返回空字符串""
-
-
-
-
-
-
-
-
-
-```
 package main
 
+//sf 为导入的包起一个别名
 import (
-   "github.com/gin-gonic/gin"
+	"fmt"
+	sf "github.com/bwmarrin/snowflake"
+	"time"
 )
 
-//
-func sayHello(c *gin.Context) {
-   c.JSON(200, gin.H{
-      "message": "hello golang!",
-   })
-}
-func main() {
-   // 1.创建默认路由引擎
-   r := gin.Default()
-   // 2.绑定路由规则，执行的函数
-   // gin.Context，封装了request和response
-   // GET：请求方式；/hello：请求的路径
-   r.GET("/hello", sayHello)
+var (
+	node *sf.Node
+)
 
-   //启动服务
-   r.Run(":8080")
+// Init 输入开始时间和机器码 初始化结点
+func Init(startTime string, machineID int64) (err error) {
+	var st time.Time
+	st, err = time.Parse("2006-01-02", startTime)
+	if err != nil {
+		return
+	}
+	sf.Epoch = st.UnixNano() / 1000000
+	node, err = sf.NewNode(machineID)
+	return
 }
+
+//返回一个id
+func GenID() int64 {
+	return node.Generate().Int64()
+}
+
+func main() {
+	err := Init("2002-06-01", 1)
+	if err != nil {
+		println("init err", err)
+		return
+	}
+	for i := 0; i < 100; i++ {
+		fmt.Println(GenID())
+	}
+
+}
+
+-----------OUT---------
+2654003688955187208
+2654003688955187209
+2654003688955187210
+2654003688955187211
+........................................
+
 ```
 
-### RESTful API
 
-简单来说，REST的含义就是客户端与Web服务器之间进行交互的时候，使用HTTP协议中的4个请求方法代表不同的动作。
 
-- `GET`用来获取资源
-- `POST`用来新建资源
-- `PUT`用来更新资源
-- `DELETE`用来删除资源。
 
-### gin 获取URI 路径参数
+
+
+
+## 并发编程
+
+#### goroutine（协程
+
+goroutine是轻量级线程
+
+在go中，main（）函数为主协程，
+
+
+
+使用goroutine，在函数或者方法调用前加上go关键字就可以创建一个goroutine，从而令函数或者方法在该goroutine中运行。
+
+#### goroutine调度
+
+**操作系统内核调度**时会挂起当前正在执行的线程并将寄存器中的内容保存到内存中，然后选出接下来要执行的线程并从内存中恢复该线程的寄存器信息，然后恢复执行该线程的现场并开始执行线程。从一个线程切换到另一个线程需要完整的上下文切换。因为可能需要多次内存访问，索引这个切换上下文的操作开销较大，会增加运行的cpu周期。
+
+**goroutine 的调度**是Go语言运行时（runtime）层面的实现，是完全由 Go 语言本身实现的一套调度系统——go scheduler。它的作用是按照一定的规则将所有的 goroutine 调度到操作系统线程上执行。
+
+#### ！！GPM模型！！
+
+其中：
+
+- G：表示 goroutine，每执行一次`go f()`就创建一个 G，包含要执行的函数和上下文信息。
+- 全局队列（Global Queue）：存放等待运行的 G。
+- P：表示 goroutine 执行所需的资源，最多有 GOMAXPROCS 个。
+- P 的本地队列：同全局队列类似，存放的也是等待运行的G，存的数量有限，不超过256个。新建 G 时，G 优先加入到 P 的本地队列，如果本地队列满了会批量移动部分 G 到全局队列。
+- M：线程想运行任务就得获取 P，从 P 的本地队列获取 G，当 P 的本地队列为空时，M 也会尝试从全局队列或其他 P 的本地队列获取 G。M （内核）运行 G，G 执行之后，M 会从 P 获取下一个 G，不断重复下去。
+- Goroutine 调度器和操作系统调度器是通过 M 结合起来的，每个 M 都代表了1个内核线程，操作系统调度器负责把内核线程分配到 CPU 的核上执行。
+
+![gpm](https://test-1309023885.cos.ap-guangzhou.myqcloud.com/typora/gpm.png)
+
+
+
+
+
+单从线程调度讲，Go语言相比起其他语言的优势在于OS线程是由OS内核来调度的， goroutine 则是由Go运行时（runtime）自己的调度器调度的，完全是在用户态下完成的， 不涉及内核态与用户态之间的频繁切换，包括内存的分配与释放，都是在用户态维护着一块大的内存池， 不直接调用系统的malloc函数（除非内存池需要改变），成本比调度OS线程低很多。 另一方面充分利用了多核的硬件资源，近似的把若干goroutine均分在物理线程上， 再加上本身 goroutine 的超轻量级，以上种种特性保证了 goroutine 调度方面的性能。
+
+**动态栈：**
+
+os线程（操作系统线程）一般有固定的栈内存（大约2mb），而一个goroutine 的栈在其生命周期开始只有很小的栈（通常为2kb），goroutinee的栈不固定，按需增大和缩小，最大限制为1GB，因此理论上goroutine可以创建十万次goroutine。Go 的 runtime （运行时） 会自动为 goroutine 分配合适的栈空间。
+
+
+
+#### 等待组sync.WaitGroup
+
+使用`time.Sleep(time.Second)`或者**sync.WaitGroup** 等待组 保证goroutine运行结束后 main再退出，否则main退出后，其他的goroutine也会结束。因为**main便是由一个主goroutine**开启的，**主goroutine结束后子goroutine也会结束**，后台各个子goroutine执行顺序是不固定的。
+
+每个 sync.WaitGroup 值在内部维护着一个计数，此计数的初始默认值为零。
+
+* 设置一个 计数器sync.WaitGroup  `wg`，当一个协程调用了 wg.Wait() 时
+  - 如果此时 wg 维护的计数为零，则此 wg.Wait() 此操作为一个空操作（noop）；
+  - 否则（计数为一个正整数，还有协程goroitine未执行），此协程将进入**阻塞状态**。当以后其它某个协程将此计数更改至 0 时（一般通过调用 wg.Done()），此协程将重新进入运行状态（即 wg.Wait() 将返回）。
 
 ```go
-func main() {
-	r := gin.Default()
-
-	r.GET("/:name/:age", func(c *gin.Context) {
-		name := c.Param("name")
-		age := c.Param("age")
-		c.JSON(http.StatusOK, gin.H{
-			"name": name,
-			"age":  age,
-		})
-	})
-	r.GET("/blog/:year/:month",func (c *gin.Context)  {
-		year := c.Params("year")
-		month := c.Params("month")
-		c.JSON(http.StatusOK, gin.H{
-			"year" : year,
-			"month" : month,
-		})
-	})
-	r.Run()
-}
-
-```
-
-<img src="https://test-1309023885.cos.ap-guangzhou.myqcloud.com/typora/image-20220514165939531.png" alt="image-20220514165939531" style="zoom:80%;" />
-
-
-
-### gin获取querystring参数
-
-应用场景：搜索引擎进行搜索关键字
-
-<img src="https://test-1309023885.cos.ap-guangzhou.myqcloud.com/typora/image-20220621235430563.png" alt="image-20220621235430563" style="zoom:67%;" />
-
-
-
-格式：`?name=123&id=123`  。路由后加`？`，各键值对用`&`连接
-
-#### Query函数
-
-获取请求中携带的参数
-
-函数原型：
-
-`func (c *Context) Query(key string) (value string)`
-
-<img src="https://test-1309023885.cos.ap-guangzhou.myqcloud.com/typora/image-20220622000941626.png" alt="image-20220622000941626" style="zoom:80%;" />
-
-
-
-```go
-func main() {
-	r := gin.Default()
-	r.GET("/index", func(c *gin.Context) {
-		//获取querystring参数
-		name := c.Query("name")
-		id := c.Query("id")
-		c.JSON(http.StatusOK, gin.H{
-			"name": name,
-			"id":   id,
-		})
-	})
-	r.Run()
-}
-```
-
-
-
-**DefaultQuery**
-
-设置默认值，若没有查找到边添加默认值。
-
-`func (c *Context) DefaultQuery(key string, defaultValue string) string`
-
-
-```go
-		name := c.DefaultQuery("name", "test")
-		id := c.DefaultQuery("id", "0")
-```
-
-
-
-<img src="https://test-1309023885.cos.ap-guangzhou.myqcloud.com/typora/image-20220622002031785.png" alt="image-20220622002031785" style="zoom:80%;" />
-
-
-
-**GetQuery**
-
-`func (c *Context) GetQuery(key string) (string, bool)`
-
-搜索到参数还将返回布尔值，搜索到 true，未搜索到 false
-
-
-
-#### gin.Context.Query
-
-func (*gin.Context).Query(key string) string
-
-
-
-<img src="https://test-1309023885.cos.ap-guangzhou.myqcloud.com/typora/image-20220620151207002.png" alt="image-20220620151207002" style="zoom:67%;" />
-
-
-
-<img src="https://test-1309023885.cos.ap-guangzhou.myqcloud.com/typora/image-20220620151229726.png" alt="image-20220620151229726" style="zoom:67%;" />
-
-<img src="https://test-1309023885.cos.ap-guangzhou.myqcloud.com/typora/image-20220620151245240.png" alt="image-20220620151245240" style="zoom:67%;" />
-
-QueryCache存放在context结构体内，使用url.ParseQuery缓存参数查询结果
-
-<img src="https://test-1309023885.cos.ap-guangzhou.myqcloud.com/typora/image-20220620151733390.png" alt="image-20220620151733390" style="zoom:67%;" />
-
-<img src="https://test-1309023885.cos.ap-guangzhou.myqcloud.com/typora/image-20220620151404465.png" alt="image-20220620151404465" style="zoom:67%;" />
-
-
-
-
-
-### 参数绑定
-
-`ShouldBind`会按照下面的顺序解析请求中的数据完成绑定：
-
-1. 如果是 `GET` 请求，只使用 `Form` 绑定引擎（`query`）。
-2. 如果是 `POST` 请求，首先检查 `content-type` 是否为 `JSON` 或 `XML`，然后再使用 `Form`（`form-data`）
-
-```
 package main
 
 import (
 	"fmt"
-	"net/http"
-
-	"github.com/gin-gonic/gin"
+	"sync"
 )
 
-type UserInfo struct {
-	//大写 外部可访问
-	//form 从c.Context 中取出对应的绑定参数
-	Username string `form:"username" json:"username" `
-	Password string `form:"password" json:"password" `
+//计数器
+var wg sync.WaitGroup
+
+func hello(i int) {
+	fmt.Println("this is hello", i)
+	wg.Done() //通知wg把计数器-1 不减的话会进去死锁
+}
+
+func main() { //开启一个主goroutine去执行main函数 主goroutine结束后 子goroutine也会结束
+	//开启100个goroutine
+	for i := 0; i < 100; i++ {
+		wg.Add(1)
+		go hello(i) //go关键字开启一个goroutine 去执行这个函数
+	}
+	fmt.Println("this is main ")
+	wg.Wait() //等待计数器清空
+}
+
+```
+
+
+
+
+
+当使用匿名函数时出现输出结果很多相同的情况：
+
+<img src="https://test-1309023885.cos.ap-guangzhou.myqcloud.com/typora/image-20220715001721288.png" alt="image-20220715001721288" style="zoom: 50%;" />
+
+该情况原因是因为该匿名函数形成闭包，goroutine时内部函数会在外部寻找变量 i ，但goroutine的函数执行时间和外部 i 的变化不是同步的（当goroutine执行时，i 已经变化）因此会出现输出相同值的情况。
+
+
+
+改正：
+
+**显式**的给匿名函数传递参数，传递时将i复制一份传入匿名函数。
+
+<img src="https://test-1309023885.cos.ap-guangzhou.myqcloud.com/typora/image-20220715002304869.png" alt="image-20220715002304869" style="zoom:50%;" />
+
+
+
+
+
+#### GOMAXPROCS
+
+操作系统线程和goroutine的关系：
+
+* 一个操作系统线程对应用户态多个goroutine
+* go程序可以同时使用多个操作系统线程
+* goroutine和os线程是多对多关系 ,即n：m
+
+go语言调度器使用GOMAXPROCS参数来确定需要使用多少个os线程来同时执行go代码。默认值是机器的CPU核心数。（1.5以后）
+
+单核心下 多个goroutine 便只能并发执行。
+
+（windows下运行可能有所不同）
+
+```go
+runtime.GOMAXPROCS(1)
+```
+
+
+
+
+
+### go channel
+
+channel是引用类型，需要使用 make 初始化并且根据缓冲区分为有、无缓冲区通道
+
+`ch` 是一个指向 [`runtime.hchan`](https://draveness.me/golang/tree/runtime.hchan) 结构体的指针；
+
+- 创建channel实际上就是在内存中实例化了一个***hchan***结构体，并返回一个chan指针
+- channle在函数间传递都是使用的这个指针，这就是为什么函数传递中无需使用channel的指针，而是直接用channel就行了，因为channel本身就是一个指针
+
+```go
+type hchan struct {
+	qcount   uint           // total data in the queue
+	dataqsiz uint           // size of the circular queue
+	buf      unsafe.Pointer // points to an array of dataqsiz elements
+	elemsize uint16
+	closed   uint32
+	elemtype *_type // element type
+	sendx    uint   // send index
+	recvx    uint   // receive index
+	recvq    waitq  // list of recv waiters
+	sendq    waitq  // list of send waiters
+
+	// lock protects all fields in hchan, as well as several
+	// fields in sudogs blocked on this channel.
+	//
+	// Do not change another G's status while holding this lock
+	// (in particular, do not ready a G), as this can deadlock
+	// with stack shrinking.
+	lock mutex
+}
+```
+
+
+
+```go
+var ch1 chan int 
+ch1 = make(chan int, 1) //有缓冲区通道 缓冲区设为 1
+//ch1 = make(chan int) //无缓冲区通道
+```
+
+通道关闭后，仍然可以读取到数据，读完后也可以读到通道类型零值，因此只能通过通道返回值 ok 来进行通道是否关闭的判断。
+
+**无缓冲区通道**
+
+使用无缓冲通道进行通信将导致发送和接收的 goroutine 同步化。因此，无缓冲通道也被称为`同步通道`。
+
+
+
+如果没有接受者，向无缓冲区通带发送数据将会一直阻塞，直到有接受者接收。
+
+```go
+
+func recv(c chan int) {
+	n := <-c //接受数据
+	fmt.Println("recv: ", n)
 }
 
 func main() {
-	r := gin.Default()
 
-	r.GET("/user", func(c *gin.Context) {
-		// username := c.Query("username")
-		// password := c.Query("password")
-		// u := UserInfo{
-		// 	username: username,
-		// 	password: password,
-		// }
-		var u UserInfo //声明UserInfo 类型变量u
-
-		//请求相关数据绑定
-		//ShouldBind检查Content-Type以自动选择绑定引擎，
-		//具体取决于“Content-Type”标头使用不同的绑定：
-
-		//****************ShuldBind***********************************
-		err := c.ShouldBind(&u) //使用指针 传递指针才能修改
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": err.Error(),
-			})
-		} else {
-			//fmt.Println("%#v\n", u)
-			c.JSON(http.StatusOK, gin.H{
-				"status": "ok",
-			})
-		}
-	})
-	//******************json*************************************
-	r.POST("/json", func(c *gin.Context) {
-		var u UserInfo          //声明UserInfo 类型变量u
-		err := c.ShouldBind(&u) //使用指针 传递指针才能修改
-
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": err.Error(),
-			})
-		} else {
-			fmt.Println("json: \n", u)
-			c.JSON(http.StatusOK, gin.H{
-				// "username": u.Username,
-				// "password": u.Password,
-				"status": "ok",
-			})
-		}
-	})
-
-	//***************form*************************************
-	//post 新建资源
-	r.POST("/form", func(c *gin.Context) {
-		var u UserInfo          //声明UserInfo 类型变量u
-		err := c.ShouldBind(&u) //使用指针 传递指针才能修改
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": err.Error(),
-			})
-		} else {
-			//fmt.Println("%#v\n", u)
-			c.JSON(http.StatusOK, gin.H{
-				"status": "ok",
-			})
-		}
-	})
-
-	r.Run()
+	var ch1 chan int // channel是引用类型，需要初始化
+	ch1 = make(chan int)
+	go recv(ch1) //goroutine 调用函数
+	ch1 <- 10  //发送
+	fmt.Println("this is main")
 }
 
+//输出
+recv:  10
+this is main
 ```
 
 
 
-使用postman 发送post请求 **form-data 数据**
+**有缓冲区通道**
 
-![image-20220514182734984](https://test-1309023885.cos.ap-guangzhou.myqcloud.com/typora/image-20220514182734984.png)
+使用 make 函数初始化通道时，可以为其指定通道的容量，即有缓冲区通道
 
+只要通道的容量大于零，那么该通道就属于有缓冲的通道，通道的容量表示通道中最大能存放的元素数量。当通道内已有元素数达到最大容量后，再向通道执行发送操作就会阻塞，除非有从通道执行接收操作。
 
-
-
-
-使用postman 发送post ， **json 格式数据**
-
-![image-20220514183428969](https://test-1309023885.cos.ap-guangzhou.myqcloud.com/typora/image-20220514183428969.png)
+我们可以使用内置的`len`函数获取通道内元素的数量，使用`cap`函数获取通道的容量，虽然我们很少会这么做。
 
 
 
+**多返回值模式**
 
+```go
+value, ok := <- ch
+```
 
-### 文件上传
+其中：
 
-上传文件就是处理了对方的post请求
+- value：从通道中取出的值，如果通道被关闭则返回对应类型的零值。
+- ok：通道ch关闭时返回 false，否则返回 true。
 
-
-
-
-
-
-
-
-
-
+目前Go语言中并没有提供一个不对通道进行读取操作就能判断通道是否被关闭的方法。不能简单的通过`len(ch)`操作来判断通道是否被关闭。
 
 
 
+**for range 接受值**
 
-
-
-
+```go
+func c3(ch chan int) {
+	for i := range ch {
+		fmt.Println("c3: ", i)
+	}
+}
+```
 
 
 
 
-### gin 请求重定向
 
-![image-20220518105256446](https://test-1309023885.cos.ap-guangzhou.myqcloud.com/typora/image-20220518105256446.png)
+#### **单向通道**
+
+#### 消费生产者模型
+
+```go
+//接受通道 生产者
+func producer() chan int {
+   ch := make(chan int, 10)
+   go func() {
+      for i := 0; i < 10; i++ {
+         ch <- i
+      }
+      close(ch)
+   }()
+
+   return ch
+}
+
+//发送通道 消费者 返回一个通道
+func consumer(ch chan int) int {
+   sum := 0
+   for {
+      v, ok := <-ch
+      if !ok {
+         break
+      }
+      sum += v
+   }
+   return sum
+}
+
+func main() {
+   ch := producer()
+   sum := consumer(ch)
+   fmt.Println(sum)
+}
+```
+
+在以下消费者函数producer中 其实也可以 向通道发送操作，但是们只希望消费者进行接受操作，而生产者进行发送操作。因此引入 **单向通道**来处理这种需要限制通道只能进行某种操作的情况。
+
+```go
+<- chan int // 只读通道，只能读取数据
+chan <- int // 只写通道，只能写入数据
+```
+
+生产者返回一个只读通道，消费者接收一个只读通道
+
+```go
+//生产者 写入数据
+//返回一个只能读取数据的通道 只读通道
+func producer() <-chan int {
+	ch := make(chan int, 10)
+	go func() {
+		for i := 0; i < 10; i++ {
+			ch <- i
+		}
+		close(ch)
+	}()
+
+	return ch
+}
+
+//消费者 读取数据
+//接收一个只读通道
+func consumer(ch <-chan int) int {
+	sum := 0
+	for {
+		v, ok := <-ch
+		if !ok {
+			break
+		}
+		sum += v
+	}
+	return sum
+}
+```
+
+![img](https://test-1309023885.cos.ap-guangzhou.myqcloud.com/typora/channel.png)
 
 
 
-### 路由和路由组
-
-路由组：
-
-`func (group *RouterGroup) Group(relativePath string, handlers ...HandlerFunc) *RouterGroup`
 
 
+#### select
+
+select关键字类似switch语句，通过一系列case分支实现同时响应多通道的操作，每一个case对应一个通道的通信过程（发送或者接收），select会一直等待，直到某个case的通信操作完成时，就会执行某case下的操作。
+
+例如：
+
+```
+for {
+		select {
+		case <-ch1:
+			fmt.Println("ch1")
+		case <-ch2:
+			fmt.Println("ch2")
+		}
+		time.Sleep(time.Second)
+	}
+```
+
+
+
+当多个case都满足，那么selecr将会随机选择一个执行。
+
+没有case的select会一直阻塞，防止main退出。
 
 ```go
 
 func main() {
-	r := gin.Default()
 
-	//访问index的GET请求会由以下匿名函数处理
-	r.GET("/index", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
-			"method": "GET",
-		})
-	})
-	//访问index的post请求会由以下匿名函数处理
-	r.POST("/index", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
-			"method": "post",
-		})
-	})
-	//访问index的put请求会由以下匿名函数处理
-	r.PUT("/index", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
-			"method": "put",
-		})
-	})
-	//访问index的delete请求会由以下匿名函数处理
-	r.DELETE("/index", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
-			"method": "delete",
-		})
-	})
-	//使用any处理所有的请求
-	r.Any("/user", func(c *gin.Context) {
-		switch c.Request.Method {
-		case "GET":
-			c.JSON(http.StatusOK, gin.H{"method": "GET"})
-		case http.MethodPost:
-			c.JSON(http.StatusOK, gin.H{"method": "POST"})
-			//...
+	ch1 := make(chan int, 1)
+	ch2 := make(chan int, 1)
+
+	go func() {
+		for {
+			ch1 <- 1
 		}
-	})
-	//NoRoute 访问没有处理的定义的路由由以下逻辑进行处理
-	r.NoRoute(func(c *gin.Context) {
-		c.JSON(http.StatusNotFound, gin.H{})
-	})
+	}()
 
-	//路由的组 路由组
-	userGroup := r.Group("/video")
-	userGroup.GET("/index", func(c *gin.Context) {c.JSON(http.StatusOK, gin.H{"method": "GET"})})
-	userGroup.GET("/login", func(c *gin.Context) {c.JSON(http.StatusOK, gin.H{"method": "GET"})})
-	userGroup.POST("/login", func(c *gin.Context) {c.JSON(http.StatusOK, gin.H{"method": "POST"})})
-	
-	
-	_ = r.Run()
+	go func() {
+		for {
+			ch2 <- 2
+		}
+	}()
+
+	for {
+		select {
+		case <-ch1:
+			fmt.Println("ch1")
+		case <-ch2:
+			fmt.Println("ch2")
+		}
+		time.Sleep(time.Second)
+	}
+
 }
+
+//输出
+ch2
+ch2
+ch2
+ch1
+ch2
+ch1
+.......
 ```
 
 
 
-### Gin中间件
 
-中间件适合处理公共的业务逻辑，例如登录校验，权限校验。
 
-允许开发者在处理请求的过程中，加入用户自己的钩子（HOOK）函数 
+### 并发安全和锁
 
-Gin中的中间件必须是一个`gin.HandlerFunc`（包含请求上下文的函数）类型。
+当多个goroutine对临界区资源进行操作时，可能会发生 竞态问题 （数据竞态）。
 
- **gin默认中间件**
+例子：
 
-`gin.Default()`默认使用了`Logger`和`Recovery`中间件，其中：
-
-- `Logger`中间件将日志写入`gin.DefaultWriter`，即使配置了`GIN_MODE=release`。
-- `Recovery`中间件会recover任何`panic`。如果有panic的话，会写入500响应码。
-
-如果不想使用上面两个默认的中间件，可以使用`gin.New()`新建一个没有任何默认中间件的路由。
-
-#### 注册中间件
-
-1. **全局路由注册**
-
-`func (engine *Engine) Use(middleware ...HandlerFunc) IRoutes`
-
-全局路由注册后，所有路由都将先依次执行全局中间件函数
-
-2. **单独注册中间件**
-
-在GET函数中注册：
-
-GET函数可以接收不定数量的参数，第二参数是` handlers ...HandlerFunc`,
-
-```
-r.GET("/index", m1Handler, m2Handler, indexHandler)
-```
-
-中间件将顺序依次执行。
-
-3. **为路由组注册中间件**
-
-   ​	第一种写法：
+输出结果每次运行都不同，因为多个goroutine获取 i ，可能同时对其进行多次操作，但结果相当于操作一次。
 
 ```go
-	cocoGroup := r.Group("/coco")
-	{
-		cocoGroup.GET("/index", m2Handler, indexHandler)
-		cocoGroup.GET("/hello", indexHandler)
+var (
+	x  int64
+	wg sync.WaitGroup //等待组 计数器
+)
+
+func add() {
+	for i := 1; i < 50000; i++ {
+		x = x + 1
 	}
+	wg.Done()
+}
+
+func main() {
+	wg.Add(2)
+	go add()
+	go add()
+	wg.Wait()
+	fmt.Println("x: ", x)
+}
+
+//输出结果
+ 66898
+或
+89039
+.......
 ```
 
-第二种写法：
 
-```go
-	cocoGroup.Use(m1Handler)
-	{
-		cocoGroup.GET("/index", m2Handler, indexHandler)
-		cocoGroup.GET("/hello", indexHandler)
-	}
-```
+
+#### 互斥锁 mutex
+
+func (m *Mutex) Lock() ： 获取互斥锁
+
+func (m *Mutex) Unlock() ： 释放互斥锁
 
 
 
@@ -1889,25 +2252,31 @@ r.GET("/index", m1Handler, m2Handler, indexHandler)
 
 
 
-### 小项目——任务清单
-
-/#/ vue默认使用hash模式
-
-![image-20220521174128393](https://test-1309023885.cos.ap-guangzhou.myqcloud.com/typora/image-20220521174128393.png)
-
-
-
-可以在进入之前创造一个用户登陆注册页面，根据不同的用户返回不同的表单
 
 
 
 
 
-![image-20220521172936946](https://test-1309023885.cos.ap-guangzhou.myqcloud.com/typora/image-20220521172936946.png)
 
-添加任务时，post请求指向 /v1/todo
 
-![image-20220521173003350](https://test-1309023885.cos.ap-guangzhou.myqcloud.com/typora/image-20220521173003350.png)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2275,482 +2644,20 @@ import (
 
 
 
-## 雪花算法
-
-![image-20220619220351999](https://test-1309023885.cos.ap-guangzhou.myqcloud.com/typora/image-20220619220351999.png)
 
 
 
 
-
-
-
-```go
-package main
-
-//sf 为导入的包起一个别名
-import (
-	"fmt"
-	sf "github.com/bwmarrin/snowflake"
-	"time"
-)
-
-var (
-	node *sf.Node
-)
-
-// Init 输入开始时间和机器码 初始化结点
-func Init(startTime string, machineID int64) (err error) {
-	var st time.Time
-	st, err = time.Parse("2006-01-02", startTime)
-	if err != nil {
-		return
-	}
-	sf.Epoch = st.UnixNano() / 1000000
-	node, err = sf.NewNode(machineID)
-	return
-}
-
-//返回一个id
-func GenID() int64 {
-	return node.Generate().Int64()
-}
-
-func main() {
-	err := Init("2002-06-01", 1)
-	if err != nil {
-		println("init err", err)
-		return
-	}
-	for i := 0; i < 100; i++ {
-		fmt.Println(GenID())
-	}
-
-}
-
------------OUT---------
-2654003688955187208
-2654003688955187209
-2654003688955187210
-2654003688955187211
-........................................
+## air热启动
 
 ```
+（1）go get -u github.com/cosmtrek/air
 
+（2）在 air 包目录中运行 : go build 生成 air.exe
 
+（3）把 air.exe 剪切到 GO_PATH 目录,或者设置环境变量
 
+（4）新建 .air.conf 文件，并复制 air 包里面的 air_example.toml 内容到 .air.conf 修改配置
 
-
-
-
-
-## 并发编程
-### goroutine
-
-使用goroutine，在函数或者方法调用前加上go关键字就可以创建一个goroutine，从而令函数或者方法在该goroutine中运行。
-
-#### goroutine调度
-
-操作系统内核在调度时会挂起当前正在执行的线程并将寄存器中的内容保存到内存中，然后选出接下来要执行的线程并从内存中恢复该线程的寄存器信息，然后恢复执行该线程的现场并开始执行线程。从一个线程切换到另一个线程需要完整的上下文切换。因为可能需要多次内存访问，索引这个切换上下文的操作开销较大，会增加运行的cpu周期。
-
-区别于操作系统内核调度操作系统线程，goroutine 的调度是Go语言运行时（runtime）层面的实现，是完全由 Go 语言本身实现的一套调度系统——go scheduler。它的作用是按照一定的规则将所有的 goroutine 调度到操作系统线程上执行。
-
-GPM模型：
-
-其中：
-
-- G：表示 goroutine，每执行一次`go f()`就创建一个 G，包含要执行的函数和上下文信息。
-- 全局队列（Global Queue）：存放等待运行的 G。
-- P：表示 goroutine 执行所需的资源，最多有 GOMAXPROCS 个。
-- P 的本地队列：同全局队列类似，存放的也是等待运行的G，存的数量有限，不超过256个。新建 G 时，G 优先加入到 P 的本地队列，如果本地队列满了会批量移动部分 G 到全局队列。
-- M：线程想运行任务就得获取 P，从 P 的本地队列获取 G，当 P 的本地队列为空时，M 也会尝试从全局队列或其他 P 的本地队列获取 G。M 运行 G，G 执行之后，M 会从 P 获取下一个 G，不断重复下去。
-- Goroutine 调度器和操作系统调度器是通过 M 结合起来的，每个 M 都代表了1个内核线程，操作系统调度器负责把内核线程分配到 CPU 的核上执行。
-
-![gpm](https://test-1309023885.cos.ap-guangzhou.myqcloud.com/typora/gpm.png)
-
-
-
-
-
-单从线程调度讲，Go语言相比起其他语言的优势在于OS线程是由OS内核来调度的， goroutine 则是由Go运行时（runtime）自己的调度器调度的，完全是在用户态下完成的， 不涉及内核态与用户态之间的频繁切换，包括内存的分配与释放，都是在用户态维护着一块大的内存池， 不直接调用系统的malloc函数（除非内存池需要改变），成本比调度OS线程低很多。 另一方面充分利用了多核的硬件资源，近似的把若干goroutine均分在物理线程上， 再加上本身 goroutine 的超轻量级，以上种种特性保证了 goroutine 调度方面的性能。
-
-**动态栈：**
-
-os线程（操作系统线程）一般有固定的栈内存（大约2mb），而一个goroutine 的栈在其生命周期开始只有很小的栈（通常为2kb），goroutinee的栈不固定，按需增大和缩小，最大限制为1GB，因此理论上goroutine可以创建十万次goroutine。Go 的 runtime （运行时） 会自动为 goroutine 分配合适的栈空间。
-
-
-
-#### 等待组sync.WaitGroup
-
-使用`time.Sleep(time.Second)`或者**sync.WaitGroup** 等待组 保证goroutine运行结束后 main再退出，否则main退出后，其他的goroutine也会结束。因为**main便是由一个主goroutine**开启的，**主goroutine结束后子goroutine也会结束**
-
-后台各个子goroutine执行顺序是不固定的。
-
-每个 sync.WaitGroup 值在内部维护着一个计数，此计数的初始默认值为零。
-
-* 当一个协程调用了 wg.Wait() 时
-  - 如果此时 wg 维护的计数为零，则此 wg.Wait() 此操作为一个空操作（noop）；
-  - 否则（计数为一个正整数），此协程将进入**阻塞状态**。当以后其它某个协程将此计数更改至 0 时（一般通过调用 wg.Done()），此协程将重新进入运行状态（即 wg.Wait() 将返回）。
-
-```go
-package main
-
-import (
-	"fmt"
-	"sync"
-)
-
-//计数器
-var wg sync.WaitGroup
-
-func hello(i int) {
-	fmt.Println("this is hello", i)
-	wg.Done() //通知wg把计数器-1 不减的话会进去死锁
-}
-
-func main() { //开启一个主goroutine去执行main函数 主goroutine结束后 子goroutine也会结束
-	//开启100个goroutine
-	for i := 0; i < 100; i++ {
-		wg.Add(1)
-		go hello(i) //go关键字开启一个goroutine 去执行这个函数
-	}
-	fmt.Println("this is main ")
-	wg.Wait() //等待计数器清空
-}
-
+（5）在项目目录中运行： air -c .air.conf
 ```
-
-
-
-
-
-当使用匿名函数时出现输出结果很多相同的情况：
-
-<img src="https://test-1309023885.cos.ap-guangzhou.myqcloud.com/typora/image-20220715001721288.png" alt="image-20220715001721288" style="zoom: 50%;" />
-
-该情况原因是因为该匿名函数形成闭包，goroutine时内部函数会在外部寻找变量 i ，但goroutine的函数执行时间和外部 i 的变化不是同步的（当goroutine执行时，i 已经变化）因此会出现输出相同值的情况。
-
-
-
-改正：
-
-**显式**的给匿名函数传递参数，传递时将i复制一份传入匿名函数。
-
-<img src="https://test-1309023885.cos.ap-guangzhou.myqcloud.com/typora/image-20220715002304869.png" alt="image-20220715002304869" style="zoom:50%;" />
-
-
-
-
-
-#### GOMAXPROCS
-
-操作系统线程和goroutine的关系：
-
-* 一个操作系统线程对应用户态多个goroutine
-* go程序可以同时使用多个操作系统线程
-* goroutine和os线程是多对多关系 ,即n：m
-
-go语言调度器使用GOMAXPROCS参数来确定需要使用多少个os线程来同时执行go代码。默认值是机器的CPU核心数。（1.5以后）
-
-单核心下 多个goroutine 便只能并发执行。
-
-（windows下运行可能有所不同）
-
-```go
-runtime.GOMAXPROCS(1)
-```
-
-
-
-
-
-### gochannel
-
-channel是引用类型，需要使用 make 初始化并且根据缓冲区分为有、无缓冲区通道
-
-当向无缓冲区通道发送数据将会阻塞。
-
-```go
-var ch1 chan int 
-ch1 = make(chan int, 1) //有缓冲区通道 缓冲区设为 1
-//ch1 = make(chan int) //无缓冲区通道
-```
-
-通道关闭后，仍然可以读取到数据，读完后也可以读到通道类型零值，因此只能通过通道返回值 ok 来进行通道是否关闭的判断。
-
-**无缓冲区通道**
-
-使用无缓冲通道进行通信将导致发送和接收的 goroutine 同步化。因此，无缓冲通道也被称为`同步通道`。
-
-
-
-如果没有接受者，向无缓冲区通带发送数据将会一直阻塞，直到有接受者接收。
-
-```go
-
-func recv(c chan int) {
-	n := <-c //接受数据
-	fmt.Println("recv: ", n)
-}
-
-func main() {
-
-	var ch1 chan int // channel是引用类型，需要初始化
-	ch1 = make(chan int)
-	go recv(ch1) //goroutine 调用函数
-	ch1 <- 10  //发送
-	fmt.Println("this is main")
-}
-
-//输出
-recv:  10
-this is main
-```
-
-
-
-
-
-**有缓冲区通道**
-
-使用 make 函数初始化通道时，可以为其指定通道的容量，即有缓冲区通道
-
-只要通道的容量大于零，那么该通道就属于有缓冲的通道，通道的容量表示通道中最大能存放的元素数量。当通道内已有元素数达到最大容量后，再向通道执行发送操作就会阻塞，除非有从通道执行接收操作。
-
-我们可以使用内置的`len`函数获取通道内元素的数量，使用`cap`函数获取通道的容量，虽然我们很少会这么做。
-
-
-
-**多返回值模式**
-
-```go
-value, ok := <- ch
-```
-
-其中：
-
-- value：从通道中取出的值，如果通道被关闭则返回对应类型的零值。
-- ok：通道ch关闭时返回 false，否则返回 true。
-
-目前Go语言中并没有提供一个不对通道进行读取操作就能判断通道是否被关闭的方法。不能简单的通过`len(ch)`操作来判断通道是否被关闭。
-
-
-
-**for range 接受值**
-
-```go
-func c3(ch chan int) {
-	for i := range ch {
-		fmt.Println("c3: ", i)
-	}
-}
-```
-
-
-
-
-
-**单向通道**
-
-#### 消费生产者模型
-
-```go
-//接受通道 生产者
-func producer() chan int {
-   ch := make(chan int, 10)
-   go func() {
-      for i := 0; i < 10; i++ {
-         ch <- i
-      }
-      close(ch)
-   }()
-
-   return ch
-}
-
-//发送通道 消费者 返回一个通道
-func consumer(ch chan int) int {
-   sum := 0
-   for {
-      v, ok := <-ch
-      if !ok {
-         break
-      }
-      sum += v
-   }
-   return sum
-}
-
-func main() {
-   ch := producer()
-   sum := consumer(ch)
-   fmt.Println(sum)
-}
-```
-
-在以下消费者函数producer中 其实也可以 向通道发送操作，但是们只希望消费者进行接受操作，而生产者进行发送操作。因此引入 **单向通道**来处理这种需要限制通道只能进行某种操作的情况。
-
-```go
-<- chan int // 只接收通道，只能接收不能发送
-chan <- int // 只发送通道，只能发送不能接收
-```
-
-生产者返回一个只读通道，消费者接收一个只读通道
-
-```go
-//生产者 写入数据
-//返回一个只能读取数据的通道 只读通道
-func producer() <-chan int {
-	ch := make(chan int, 10)
-	go func() {
-		for i := 0; i < 10; i++ {
-			ch <- i
-		}
-		close(ch)
-	}()
-
-	return ch
-}
-
-//消费者 读取数据
-//接收一个只读通道
-func consumer(ch <-chan int) int {
-	sum := 0
-	for {
-		v, ok := <-ch
-		if !ok {
-			break
-		}
-		sum += v
-	}
-	return sum
-}
-```
-
-![img](https://test-1309023885.cos.ap-guangzhou.myqcloud.com/typora/channel.png)
-
-
-
-
-
-#### select
-
-select关键字类似switch语句，通过一系列case分支实现同时响应多通道的操作，每一个case对应一个通道的通信过程（发送或者接收），select会一直等待，直到某个case的通信操作完成时，就会执行某case下的操作。
-
-例如：
-
-```
-for {
-		select {
-		case <-ch1:
-			fmt.Println("ch1")
-		case <-ch2:
-			fmt.Println("ch2")
-		}
-		time.Sleep(time.Second)
-	}
-```
-
-
-
-当多个case都满足，那么selecr将会随机选择一个执行。
-
-没有case的select会一直阻塞，防止main退出。
-
-```go
-
-func main() {
-
-	ch1 := make(chan int, 1)
-	ch2 := make(chan int, 1)
-
-	go func() {
-		for {
-			ch1 <- 1
-		}
-	}()
-
-	go func() {
-		for {
-			ch2 <- 2
-		}
-	}()
-
-	for {
-		select {
-		case <-ch1:
-			fmt.Println("ch1")
-		case <-ch2:
-			fmt.Println("ch2")
-		}
-		time.Sleep(time.Second)
-	}
-
-}
-
-//输出
-ch2
-ch2
-ch2
-ch1
-ch2
-ch1
-.......
-```
-
-
-
-
-
-### 并发安全和锁
-
-当多个goroutine对临界区资源进行操作时，可能会发生 竞态问题 （数据竞态）。
-
-例子：
-
-输出结果每次运行都不同，因为多个goroutine获取 i ，可能同时对其进行多次操作，但结果相当于操作一次。
-
-```go
-var (
-	x  int64
-	wg sync.WaitGroup //等待组 计数器
-)
-
-func add() {
-	for i := 1; i < 50000; i++ {
-		x = x + 1
-	}
-	wg.Done()
-}
-
-func main() {
-	wg.Add(2)
-	go add()
-	go add()
-	wg.Wait()
-	fmt.Println("x: ", x)
-}
-
-//输出结果
- 66898
-或
-89039
-.......
-```
-
-
-
-#### 互斥锁 mutex
-
-func (m *Mutex) Lock() ： 获取互斥锁
-
-func (m *Mutex) Unlock() ： 释放互斥锁
-
-
-
-
-
-
-
-
-
